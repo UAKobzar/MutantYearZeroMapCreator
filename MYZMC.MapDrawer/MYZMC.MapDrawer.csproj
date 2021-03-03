@@ -12,4 +12,10 @@
     <ProjectReference Include="..\Entities\MYZMC.Entities.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="brushes\*">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

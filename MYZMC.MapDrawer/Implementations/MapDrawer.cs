@@ -18,7 +18,7 @@ namespace MYZMC.MapDrawer.Implementations
         private const string boundaryMode = "boundary";
         private const string fillMode = "fill";
 
-        private const string textureFolder = @"D:\OwnProjects\MutantYearZeroMapCreator\MYZMC.MapDrawer\brushes";
+        private const string textureFolder = @".\brushes";
 
         private readonly List<(List<string> tags, Bitmap file)> _textures;
 
@@ -36,7 +36,7 @@ namespace MYZMC.MapDrawer.Implementations
 
             foreach (FileInfo file in Files)
             {
-                var tags = file.Name.Split('.', '_');
+                var tags = file.Name.Replace(file.Extension, "").Split('_');
                 var bitmap = new Bitmap(file.FullName);
 
                 result.Add((tags.ToList(), bitmap));
@@ -104,12 +104,12 @@ namespace MYZMC.MapDrawer.Implementations
 
             foreach (var way in data.Way)
             {
-                var width = 100;
+                var width = 50;
                 var wayNodes = data.Node.Where(n => way.Nd.Any(r => r.Ref == n.Id)).ToList();
 
                 var boundaryBrush = GetBrush(way, boundaryMode);
 
-                boundaryBrush.ScaleTransform(width / boundaryBrush.Image.Height, width / boundaryBrush.Image.Height);
+                boundaryBrush?.ScaleTransform((float)width / boundaryBrush.Image.Height, (float)width / boundaryBrush.Image.Height);
 
                 var fillBrush = GetBrush(way, fillMode);
 
@@ -136,14 +136,14 @@ namespace MYZMC.MapDrawer.Implementations
                     {
                         boundaryBrush.RotateTransform(angle);
 
-                        image.FillPolygon(boundaryBrush, GetBoundaryPoints(startPoint, endPoint , width));
+                        image.FillPolygon(boundaryBrush, GetBoundaryPoints(startPoint, endPoint, width));
 
                         boundaryBrush.RotateTransform(-angle);
                     }
 
                 }
 
-                if(fillBrush != null && points.Count > 2)
+                if (fillBrush != null && points.Count > 2)
                 {
                     image.FillPolygon(fillBrush, points.ToArray());
                 }
@@ -165,22 +165,27 @@ namespace MYZMC.MapDrawer.Implementations
             var angle = GetAngle(startPoint, endPoint);
 
             var points = GetWidthPoints(startPoint, width, angle).ToList();
-            points.AddRange(GetWidthPoints(endPoint, width, angle));
+            points.AddRange(GetWidthPoints(endPoint, width, angle).Reverse());
 
             return points.ToArray();
         }
 
         private Point[] GetWidthPoints(Point middlePoint, int width, float angle)
         {
+            width /= 2;
             var perpAngle = angle + 90;
 
-            var radAngle = perpAngle * (Math.PI / 180);
+            var radPerpAngle = perpAngle * (Math.PI / 180);
 
-            var k = Math.Tan(radAngle);
+            var k = Math.Tan(radPerpAngle);
             var b = middlePoint.Y - k * middlePoint.X;
 
-            var x1 = width / (2 * k);
-            var x2 = 2 * middlePoint.X - x1;
+            var radAngle = angle * (Math.PI / 180);
+
+            var dx = Math.Sin(radAngle) * width;
+
+            var x1 = middlePoint.X - dx;
+            var x2 = middlePoint.X + dx;
 
             var y1 = k * x1 + b;
             var y2 = k * x2 + b;
@@ -190,7 +195,7 @@ namespace MYZMC.MapDrawer.Implementations
 
         private void DrawGround(Graphics image)
         {
-            var trafaret = new Bitmap(@"D:\OwnProjects\MutantYearZeroMapCreator\MYZMC.MapDrawer\brushes\ground._texture.fill.jpg");
+            var trafaret = new Bitmap(@".\brushes\ground._texture.fill.jpg");
             var brush = new TextureBrush(trafaret);
             brush.ScaleTransform(0.1F, 0.1F);
 
@@ -199,14 +204,45 @@ namespace MYZMC.MapDrawer.Implementations
 
         private TextureBrush GetBrush(Way way, string mode)
         {
-            var tags = way.Tag.SelectMany(t => new[] { t.K, t.V }).ToList();
+            var bestTextureIndex = -1;
+            var bestTextureValue = 0;
 
-            var perTagsCount = _textures.Where(t => t.tags.Contains(mode)).Select(t => new { count = t.tags.Count(tg => tags.Contains(tg)), t.file }).ToList();
+            var textures = _textures.Where(t => t.tags.Contains("texture." + mode)).ToList();
 
-            var trafaret = perTagsCount.OrderByDescending(t => t.count).First().file;
-            var brush = new TextureBrush(trafaret);
+            for (int i = 0; i < textures.Count; i++)
+            {
+                var texture = textures[i];
+                var textureVal = 0;
+                foreach (var tag in way.Tag)
+                {
+                    if (texture.tags.Any(t => t.StartsWith(tag.K)))
+                    {
+                        textureVal += 1;
+                    }
+                    if (texture.tags.Any(t => t.StartsWith(tag.K + '.' + tag.V)))
+                    {
+                        textureVal += 2;
+                    }
+                }
 
-            return brush;
+                if(textureVal > bestTextureValue)
+                {
+                    bestTextureValue = textureVal;
+                    bestTextureIndex = i;
+                }
+            }
+
+            if (bestTextureIndex != -1)
+            {
+                var trafaret = textures[bestTextureIndex].file;
+                var brush = new TextureBrush(trafaret);
+
+                return brush;
+            }
+            else
+            {
+                return null;
+            }
         }
     }
 }
